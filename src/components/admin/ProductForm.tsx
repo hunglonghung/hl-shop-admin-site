@@ -7,23 +7,45 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Upload, X, ImageIcon, Plus } from "lucide-react";
+import { ArrowLeft, Plus, Percent, Package } from "lucide-react";
+import { MultiImageUpload } from "./MultiImageUpload";
 
 interface ProductFormData {
   name: string;
   category: string;
   subcategory: string;
+  brand: string;
   price: string;
   description: string;
   image_url: string;
+  additional_images: string[];
+  discount_percentage: string;
+  is_combo: boolean;
+  combo_products: string[];
 }
 
 interface Category {
   id: string;
   name: string;
   subcategories: string[];
+}
+
+interface Brand {
+  id: string;
+  name: string;
+  logo_url?: string;
+}
+
+interface Product {
+  id: string;
+  name: string;
+  category: string;
+  subcategory: string;
+  price: number;
 }
 
 export function ProductForm() {
@@ -34,24 +56,34 @@ export function ProductForm() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [loading, setLoading] = useState(false);
-  const [uploadingImage, setUploadingImage] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [showAddCategory, setShowAddCategory] = useState(false);
+  const [showAddBrand, setShowAddBrand] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newSubcategory, setNewSubcategory] = useState("");
+  const [newBrandName, setNewBrandName] = useState("");
   const [formData, setFormData] = useState<ProductFormData>({
     name: "",
     category: "",
     subcategory: "",
+    brand: "",
     price: "",
     description: "",
-    image_url: ""
+    image_url: "",
+    additional_images: [],
+    discount_percentage: "",
+    is_combo: false,
+    combo_products: []
   });
 
   const selectedCategory = categories.find(cat => cat.name === formData.category);
 
   useEffect(() => {
     fetchCategories();
+    fetchBrands();
+    fetchProducts();
     if (isEdit && id) {
       fetchProduct(id);
     }
@@ -76,6 +108,39 @@ export function ProductForm() {
     }
   };
 
+  const fetchBrands = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('brands' as any)
+        .select('*')
+        .order('name');
+
+      if (error) throw error;
+      setBrands((data as any) || []);
+    } catch (error) {
+      console.error('Error fetching brands:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to fetch brands"
+      });
+    }
+  };
+
+  const fetchProducts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, name, category, subcategory, price')
+        .order('name');
+
+      if (error) throw error;
+      setProducts(data || []);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+    }
+  };
+
   const fetchProduct = async (productId: string) => {
     try {
       const { data, error } = await supabase
@@ -90,9 +155,14 @@ export function ProductForm() {
         name: data.name,
         category: data.category,
         subcategory: data.subcategory,
+        brand: data.brand || "",
         price: data.price.toString(),
         description: data.description || "",
-        image_url: data.image_url || ""
+        image_url: data.image_url || "",
+        additional_images: data.additional_images || [],
+        discount_percentage: data.discount_percentage?.toString() || "",
+        is_combo: data.is_combo || false,
+        combo_products: data.combo_products || []
       });
     } catch (error) {
       console.error('Error fetching product:', error);
@@ -109,13 +179,23 @@ export function ProductForm() {
     setLoading(true);
 
     try {
+      const discountPercentage = formData.discount_percentage ? parseFloat(formData.discount_percentage) : null;
+      const discountedPrice = discountPercentage ? 
+        parseFloat(formData.price) * (1 - discountPercentage / 100) : null;
+
       const productData = {
         name: formData.name,
         category: formData.category,
         subcategory: formData.subcategory,
+        brand: formData.brand || null,
         price: parseFloat(formData.price),
         description: formData.description,
-        image_url: formData.image_url
+        image_url: formData.image_url,
+        additional_images: formData.additional_images,
+        discount_percentage: discountPercentage,
+        discounted_price: discountedPrice,
+        is_combo: formData.is_combo,
+        combo_products: formData.is_combo ? formData.combo_products : []
       };
 
       if (isEdit && id) {
@@ -156,86 +236,64 @@ export function ProductForm() {
     }
   };
 
-  const handleInputChange = (field: keyof ProductFormData, value: string) => {
+  const handleInputChange = (field: keyof ProductFormData, value: string | boolean | string[]) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
     }));
   };
 
-  const handleImageUpload = async (file: File) => {
-    try {
-      setUploadingImage(true);
-      
-      // Create a unique filename
-      const fileExt = file.name.split('.').pop();
-      const fileName = `product-${Date.now()}.${fileExt}`;
-      const filePath = `products/${fileName}`;
+  const addBrand = async () => {
+    if (!newBrandName.trim()) return;
 
-      // Upload file to Supabase storage
-      const { data, error } = await supabase.storage
-        .from('product-images')
-        .upload(filePath, file);
+    try {
+      const { error } = await supabase
+        .from('brands' as any)
+        .insert({
+          name: newBrandName
+        });
 
       if (error) throw error;
 
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('product-images')
-        .getPublicUrl(filePath);
-
-      // Update form data with the new image URL
-      handleInputChange('image_url', publicUrl);
-
       toast({
         title: "Success",
-        description: "Image uploaded successfully"
+        description: "Brand added successfully"
       });
 
+      setNewBrandName("");
+      setShowAddBrand(false);
+      fetchBrands();
     } catch (error) {
-      console.error('Error uploading image:', error);
+      console.error('Error adding brand:', error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to upload image"
+        description: "Failed to add brand"
       });
-    } finally {
-      setUploadingImage(false);
     }
   };
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      // Check file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "File size must be less than 5MB"
-        });
-        return;
-      }
-
-      // Check file type
-      if (!file.type.startsWith('image/')) {
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "Please select a valid image file"
-        });
-        return;
-      }
-
-      handleImageUpload(file);
-    }
+  const getDiscountedPrice = () => {
+    if (!formData.discount_percentage || !formData.price) return null;
+    const price = parseFloat(formData.price);
+    const discount = parseFloat(formData.discount_percentage);
+    return price * (1 - discount / 100);
   };
 
-  const removeImage = () => {
-    handleInputChange('image_url', '');
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+  const availableProductsForCombo = products.filter(p => 
+    p.id !== id && !formData.combo_products.includes(p.id)
+  );
+
+  const selectedComboProducts = products.filter(p => 
+    formData.combo_products.includes(p.id)
+  );
+
+  const toggleComboProduct = (productId: string) => {
+    const updatedComboProducts = formData.combo_products.includes(productId)
+      ? formData.combo_products.filter(id => id !== productId)
+      : [...formData.combo_products, productId];
+    
+    handleInputChange('combo_products', updatedComboProducts);
   };
 
   const addCategory = async () => {
@@ -304,6 +362,61 @@ export function ProductForm() {
               </div>
 
               <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="brand">Brand</Label>
+                  <Dialog open={showAddBrand} onOpenChange={setShowAddBrand}>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add Brand
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Add New Brand</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div>
+                          <Label htmlFor="new-brand">Brand Name</Label>
+                          <Input
+                            id="new-brand"
+                            value={newBrandName}
+                            onChange={(e) => setNewBrandName(e.target.value)}
+                            placeholder="Enter brand name"
+                          />
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <Button variant="outline" onClick={() => setShowAddBrand(false)}>
+                            Cancel
+                          </Button>
+                          <Button onClick={addBrand}>
+                            Add Brand
+                          </Button>
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+                <Select
+                  value={formData.brand}
+                  onValueChange={(value) => handleInputChange('brand', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select brand" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {brands.map((brand) => (
+                      <SelectItem key={brand.id} value={brand.name}>
+                        {brand.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
                 <Label htmlFor="price">Price (VND) *</Label>
                 <Input
                   id="price"
@@ -315,6 +428,31 @@ export function ProductForm() {
                   step="1000"
                   required
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="discount">Discount Percentage</Label>
+                <div className="relative">
+                  <Input
+                    id="discount"
+                    type="number"
+                    value={formData.discount_percentage}
+                    onChange={(e) => handleInputChange('discount_percentage', e.target.value)}
+                    placeholder="0"
+                    min="0"
+                    max="100"
+                    step="1"
+                  />
+                  <Percent className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                </div>
+                {formData.discount_percentage && formData.price && (
+                  <p className="text-sm text-muted-foreground">
+                    Discounted price: {new Intl.NumberFormat('vi-VN', {
+                      style: 'currency',
+                      currency: 'VND'
+                    }).format(getDiscountedPrice() || 0)}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -406,69 +544,25 @@ export function ProductForm() {
             </div>
 
             <div className="space-y-2">
-              <Label>Product Image</Label>
-              <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6">
-                {formData.image_url ? (
-                  <div className="space-y-4">
-                    <div className="relative inline-block">
-                      <img 
-                        src={formData.image_url} 
-                        alt="Product preview"
-                        className="w-40 h-40 object-cover rounded-lg border"
-                        onError={(e) => {
-                          e.currentTarget.style.display = 'none';
-                        }}
-                      />
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        size="sm"
-                        className="absolute -top-2 -right-2 h-6 w-6 rounded-full p-0"
-                        onClick={removeImage}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={uploadingImage}
-                      >
-                        <Upload className="h-4 w-4 mr-2" />
-                        Change Image
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center">
-                    <ImageIcon className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                    <p className="text-sm text-muted-foreground mb-4">
-                      Upload a product image (max 5MB)
-                    </p>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={uploadingImage}
-                    >
-                      <Upload className="h-4 w-4 mr-2" />
-                      {uploadingImage ? 'Uploading...' : 'Choose Image'}
-                    </Button>
-                  </div>
-                )}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
+              <Label>Product Images</Label>
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-sm font-medium">Main Image *</Label>
+                  <MultiImageUpload
+                    images={formData.image_url ? [formData.image_url] : []}
+                    onChange={(images) => handleInputChange('image_url', images[0] || '')}
+                    maxImages={1}
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">Additional Images (Optional)</Label>
+                  <MultiImageUpload
+                    images={formData.additional_images}
+                    onChange={(images) => handleInputChange('additional_images', images)}
+                    maxImages={4}
+                  />
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Supported formats: JPEG, PNG, WebP. Maximum size: 5MB
-              </p>
             </div>
 
             <div className="space-y-2">
@@ -480,6 +574,90 @@ export function ProductForm() {
                 placeholder="Enter product description..."
                 rows={4}
               />
+            </div>
+
+            {/* Combo Product Section */}
+            <div className="space-y-4 p-6 bg-muted/50 rounded-lg">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="is-combo"
+                  checked={formData.is_combo}
+                  onCheckedChange={(checked) => {
+                    handleInputChange('is_combo', !!checked);
+                    if (!checked) {
+                      handleInputChange('combo_products', []);
+                    }
+                  }}
+                />
+                <Label htmlFor="is-combo" className="flex items-center">
+                  <Package className="w-4 h-4 mr-2" />
+                  Create Combo Product
+                </Label>
+              </div>
+
+              {formData.is_combo && (
+                <div className="space-y-4">
+                  <div>
+                    <Label className="text-sm font-medium">Select Products for Combo</Label>
+                    <div className="mt-2 max-h-48 overflow-y-auto border rounded-lg p-3 bg-background">
+                      {availableProductsForCombo.map((product) => (
+                        <div key={product.id} className="flex items-center space-x-2 py-2">
+                          <Checkbox
+                            id={`combo-${product.id}`}
+                            checked={formData.combo_products.includes(product.id)}
+                            onCheckedChange={() => toggleComboProduct(product.id)}
+                          />
+                          <Label htmlFor={`combo-${product.id}`} className="flex-1 cursor-pointer">
+                            <div className="flex justify-between items-center">
+                              <span>{product.name}</span>
+                              <span className="text-sm text-muted-foreground">
+                                {new Intl.NumberFormat('vi-VN', {
+                                  style: 'currency',
+                                  currency: 'VND'
+                                }).format(product.price)}
+                              </span>
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {product.category} • {product.subcategory}
+                            </div>
+                          </Label>
+                        </div>
+                      ))}
+                      {availableProductsForCombo.length === 0 && (
+                        <p className="text-sm text-muted-foreground text-center py-4">
+                          No other products available for combo
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {selectedComboProducts.length > 0 && (
+                    <div>
+                      <Label className="text-sm font-medium">Selected Products ({selectedComboProducts.length})</Label>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {selectedComboProducts.map((product) => (
+                          <Badge key={product.id} variant="secondary" className="flex items-center gap-1">
+                            {product.name}
+                            <button
+                              type="button"
+                              onClick={() => toggleComboProduct(product.id)}
+                              className="ml-1 rounded-full hover:bg-muted-foreground/20"
+                            >
+                              ×
+                            </button>
+                          </Badge>
+                        ))}
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-2">
+                        Individual total: {new Intl.NumberFormat('vi-VN', {
+                          style: 'currency',
+                          currency: 'VND'
+                        }).format(selectedComboProducts.reduce((sum, p) => sum + p.price, 0))}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="flex gap-4 pt-6">

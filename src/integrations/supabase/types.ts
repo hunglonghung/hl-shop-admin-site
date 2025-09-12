@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      brands: {
+        Row: {
+          created_at: string
+          id: string
+          logo_url: string | null
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          logo_url?: string | null
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          logo_url?: string | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       categories: {
         Row: {
           created_at: string
@@ -40,33 +64,54 @@ export type Database = {
       }
       products: {
         Row: {
+          additional_images: string[] | null
+          authenticity_type: string | null
+          brand: string | null
           category: string
+          combo_products: string[] | null
           created_at: string
           description: string | null
+          discount_percentage: number | null
+          discounted_price: number | null
           id: string
           image_url: string | null
+          is_combo: boolean | null
           name: string
           price: number
           subcategory: string
           updated_at: string
         }
         Insert: {
+          additional_images?: string[] | null
+          authenticity_type?: string | null
+          brand?: string | null
           category: string
+          combo_products?: string[] | null
           created_at?: string
           description?: string | null
+          discount_percentage?: number | null
+          discounted_price?: number | null
           id?: string
           image_url?: string | null
+          is_combo?: boolean | null
           name: string
           price: number
           subcategory: string
           updated_at?: string
         }
         Update: {
+          additional_images?: string[] | null
+          authenticity_type?: string | null
+          brand?: string | null
           category?: string
+          combo_products?: string[] | null
           created_at?: string
           description?: string | null
+          discount_percentage?: number | null
+          discounted_price?: number | null
           id?: string
           image_url?: string | null
+          is_combo?: boolean | null
           name?: string
           price?: number
           subcategory?: string
