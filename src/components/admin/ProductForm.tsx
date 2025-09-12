@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Plus, Percent, Package } from "lucide-react";
+import { ArrowLeft, Plus, Percent, Package, X } from "lucide-react";
 import { MultiImageUpload } from "./MultiImageUpload";
 
 interface ProductFormData {
@@ -26,6 +26,7 @@ interface ProductFormData {
   discount_percentage: string;
   is_combo: boolean;
   combo_products: string[];
+  specifications: { [key: string]: string };
 }
 
 interface Category {
@@ -75,7 +76,8 @@ export function ProductForm() {
     additional_images: [],
     discount_percentage: "",
     is_combo: false,
-    combo_products: []
+    combo_products: [],
+    specifications: {}
   });
 
   const selectedCategory = categories.find(cat => cat.name === formData.category);
@@ -162,7 +164,8 @@ export function ProductForm() {
         additional_images: data.additional_images || [],
         discount_percentage: data.discount_percentage?.toString() || "",
         is_combo: data.is_combo || false,
-        combo_products: data.combo_products || []
+        combo_products: data.combo_products || [],
+        specifications: (data.specifications as { [key: string]: string }) || {}
       });
     } catch (error) {
       console.error('Error fetching product:', error);
@@ -195,7 +198,8 @@ export function ProductForm() {
         discount_percentage: discountPercentage,
         discounted_price: discountedPrice,
         is_combo: formData.is_combo,
-        combo_products: formData.is_combo ? formData.combo_products : []
+        combo_products: formData.is_combo ? formData.combo_products : [],
+        specifications: formData.specifications
       };
 
       if (isEdit && id) {
@@ -236,7 +240,7 @@ export function ProductForm() {
     }
   };
 
-  const handleInputChange = (field: keyof ProductFormData, value: string | boolean | string[]) => {
+  const handleInputChange = (field: keyof ProductFormData, value: string | boolean | string[] | { [key: string]: string }) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -326,6 +330,29 @@ export function ProductForm() {
         description: "Failed to add category"
       });
     }
+  };
+
+  const addSpecification = () => {
+    const newKey = `spec_${Object.keys(formData.specifications).length + 1}`;
+    handleInputChange('specifications', {
+      ...formData.specifications,
+      [newKey]: ''
+    });
+  };
+
+  const updateSpecification = (oldKey: string, newKey: string, value: string) => {
+    const updatedSpecs = { ...formData.specifications };
+    if (oldKey !== newKey) {
+      delete updatedSpecs[oldKey];
+    }
+    updatedSpecs[newKey] = value;
+    handleInputChange('specifications', updatedSpecs);
+  };
+
+  const removeSpecification = (key: string) => {
+    const updatedSpecs = { ...formData.specifications };
+    delete updatedSpecs[key];
+    handleInputChange('specifications', updatedSpecs);
   };
 
   return (
@@ -574,6 +601,58 @@ export function ProductForm() {
                 placeholder="Enter product description..."
                 rows={4}
               />
+            </div>
+
+            {/* Specifications Section */}
+            <div className="space-y-4 p-6 bg-muted/50 rounded-lg">
+              <div className="flex items-center justify-between">
+                <Label className="text-base font-medium">Thông số kỹ thuật</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addSpecification}
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Thêm thông số
+                </Button>
+              </div>
+              
+              {Object.entries(formData.specifications).length > 0 ? (
+                <div className="space-y-3">
+                  {Object.entries(formData.specifications).map(([key, value], index) => (
+                    <div key={index} className="flex gap-2 items-center">
+                      <div className="flex-1">
+                        <Input
+                          placeholder="Tên thông số (VD: Kích thước, Trọng lượng)"
+                          value={key.startsWith('spec_') ? '' : key}
+                          onChange={(e) => updateSpecification(key, e.target.value, value)}
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <Input
+                          placeholder="Giá trị (VD: 27cm x 43cm, 300g)"
+                          value={value}
+                          onChange={(e) => updateSpecification(key, key, e.target.value)}
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeSpecification(key)}
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  Chưa có thông số nào. Nhấn "Thêm thông số" để bắt đầu.
+                </p>
+              )}
             </div>
 
             {/* Combo Product Section */}

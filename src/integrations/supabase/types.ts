@@ -78,6 +78,7 @@ export type Database = {
           is_combo: boolean | null
           name: string
           price: number
+          specifications: Json | null
           subcategory: string
           updated_at: string
         }
@@ -96,6 +97,7 @@ export type Database = {
           is_combo?: boolean | null
           name: string
           price: number
+          specifications?: Json | null
           subcategory: string
           updated_at?: string
         }
@@ -114,6 +116,7 @@ export type Database = {
           is_combo?: boolean | null
           name?: string
           price?: number
+          specifications?: Json | null
           subcategory?: string
           updated_at?: string
         }
