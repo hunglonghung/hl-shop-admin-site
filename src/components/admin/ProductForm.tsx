@@ -27,6 +27,7 @@ interface ProductFormData {
   is_combo: boolean;
   combo_products: string[];
   specifications: { [key: string]: string };
+  authenticity_type: string;
 }
 
 interface Category {
@@ -77,7 +78,8 @@ export function ProductForm() {
     discount_percentage: "",
     is_combo: false,
     combo_products: [],
-    specifications: {}
+    specifications: {},
+    authenticity_type: "chính hãng"
   });
 
   const selectedCategory = categories.find(cat => cat.name === formData.category);
@@ -165,7 +167,8 @@ export function ProductForm() {
         discount_percentage: data.discount_percentage?.toString() || "",
         is_combo: data.is_combo || false,
         combo_products: data.combo_products || [],
-        specifications: (data.specifications as { [key: string]: string }) || {}
+        specifications: (data.specifications as { [key: string]: string }) || {},
+        authenticity_type: data.authenticity_type || "chính hãng"
       });
     } catch (error) {
       console.error('Error fetching product:', error);
@@ -199,7 +202,8 @@ export function ProductForm() {
         discounted_price: discountedPrice,
         is_combo: formData.is_combo,
         combo_products: formData.is_combo ? formData.combo_products : [],
-        specifications: formData.specifications
+        specifications: formData.specifications,
+        authenticity_type: formData.authenticity_type
       };
 
       if (isEdit && id) {
@@ -442,7 +446,7 @@ export function ProductForm() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="space-y-2">
                 <Label htmlFor="price">Price (VND) *</Label>
                 <Input
@@ -480,6 +484,22 @@ export function ProductForm() {
                     }).format(getDiscountedPrice() || 0)}
                   </p>
                 )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="authenticity_type">Authenticity Type</Label>
+                <Select
+                  value={formData.authenticity_type}
+                  onValueChange={(value) => handleInputChange('authenticity_type', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select authenticity type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="chính hãng">Chính hãng</SelectItem>
+                    <SelectItem value="1:1">1:1</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
